@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-01
+
+### Added
+- Multi-face-per-photo export: photos with N faces produce N copies in output by default; use `--no-multi-export` to revert to one copy per photo ([4f1cabf](https://github.com/dinhanhthi/face-organizer/commit/4f1cabf))
+- `--reference-dir` now accepts multiple photos per person for more robust identity matching ([54d775a](https://github.com/dinhanhthi/face-organizer/commit/54d775a))
+
+### Changed
+- Added project logo to README ([26b0dd8](https://github.com/dinhanhthi/face-organizer/commit/26b0dd8))
+
 ## [0.1.1] - 2026-05-01
 
 ### Fixed
