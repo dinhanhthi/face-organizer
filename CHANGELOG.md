@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-01
+
+### Added
+- `fgroup video` subcommand: groups video files by detected person using the same face recognition pipeline as `fgroup group` ([66f6967](https://github.com/dinhanhthi/face-organizer/commit/66f6967))
+- `--max-duration` option for `fgroup video`: default 15s, max 120s — videos exceeding the limit go to `skipped/` ([66f6967](https://github.com/dinhanhthi/face-organizer/commit/66f6967))
+- `--ref-dir` support for `fgroup video`: maps reference images to named clusters (e.g. `john.jpg` → `john/` folder) ([66f6967](https://github.com/dinhanhthi/face-organizer/commit/66f6967))
+- `--mode [group|rename]` for `fgroup video`: `group` creates `person_N/` subfolders, `rename` produces flat `person_N_vid_M.ext` files ([66f6967](https://github.com/dinhanhthi/face-organizer/commit/66f6967))
+- Multi-person video support: a video featuring N people is copied into all N person folders ([66f6967](https://github.com/dinhanhthi/face-organizer/commit/66f6967))
+- New `[video]` optional extra: `pip install 'face-grouper[video]'` pulls in `opencv-python` ([66f6967](https://github.com/dinhanhthi/face-organizer/commit/66f6967))
+
+### Changed
+- `--reference-dir` renamed to `--ref-dir` in `fgroup group` (old name kept as alias for compatibility) ([66f6967](https://github.com/dinhanhthi/face-organizer/commit/66f6967))
+- `collision_free_path()` made public API (was `_collision_free_path`) ([66f6967](https://github.com/dinhanhthi/face-organizer/commit/66f6967))
+
 ## [0.2.0] - 2026-05-01
 
 ### Added
