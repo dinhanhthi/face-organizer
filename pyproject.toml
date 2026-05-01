@@ -1,0 +1,26 @@
+[project]
+name = "face-grouper"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "face-recognition>=1.3.0",
+    "scikit-learn>=1.0.0",
+    "click>=8.0.0",
+    "numpy>=1.21.0",
+    "rich>=12.0.0",
+]
+
+[project.scripts]
+face-grouper = "face_grouper.cli:cli"
+fgroup = "face_grouper.cli:cli"
+
+[project.optional-dependencies]
+arcface = ["insightface>=0.7.3", "onnxruntime>=1.16.0", "opencv-python>=4.5.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["face_grouper*"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
