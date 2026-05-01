@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-01
+
+### Added
+- `--start-index` option for both `fgroup group` and `fgroup video` in rename mode: sets the starting counter index (e.g. `--start-index 10` produces `person_N_img_10.ext`, `person_N_img_11.ext`, …); defaults to `1`, ignored in group mode ([49d27ef](https://github.com/dinhanhthi/face-organizer/commit/49d27ef))
+
+### Changed
+- README Parameters section restructured into a shared common table and per-command specific tables ([49d27ef](https://github.com/dinhanhthi/face-organizer/commit/49d27ef))
+
 ## [0.3.0] - 2026-05-01
 
 ### Added
