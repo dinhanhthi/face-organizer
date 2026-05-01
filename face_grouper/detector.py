@@ -1,5 +1,6 @@
 """Face detection and embedding extraction using face_recognition or DeepFace/ArcFace."""
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -189,15 +190,26 @@ def detect_faces(
     return _detect_dlib(image_paths, model=model, upsample=upsample)
 
 
+def _reference_base_name(stem: str) -> str:
+    """Extract person name from a reference filename stem by stripping trailing _N suffix.
+
+    'john_1' → 'john', 'john_doe_2' → 'john_doe', 'john' → 'john'.
+    Falls back to the original stem if stripping would produce an empty string.
+    """
+    return re.sub(r"_\d+$", "", stem) or stem
+
+
 def detect_reference_faces(
     image_paths: list[Path],
     backend: str = "dlib",
     model: str = "hog",
     upsample: int = 1,
-) -> dict[str, np.ndarray]:
-    """Detect exactly one face per reference image and return a name → embedding mapping.
+) -> dict[str, list[np.ndarray]]:
+    """Detect one face per reference image and return a name → embeddings mapping.
 
-    Images with zero or more than one face are skipped with a warning printed to console.
+    Filenames with a trailing _N suffix (e.g. john_1.jpg, john_2.jpg) are grouped
+    under the same base name ("john"), allowing multiple reference photos per person.
+    Images with zero or more than one face are skipped with a warning.
     Must be called with the same backend/model/upsample settings as the main detection run
     so that embedding spaces are compatible.
 
@@ -208,9 +220,10 @@ def detect_reference_faces(
         upsample: Upsample factor for dlib. Ignored for arcface.
 
     Returns:
-        Mapping from image stem (filename without extension) to embedding array.
+        Mapping from person name to list of embedding arrays (one per reference photo).
+        Multiple photos for the same person are accumulated under the same key.
     """
-    result: dict[str, np.ndarray] = {}
+    result: dict[str, list[np.ndarray]] = {}
 
     if backend.lower() == "arcface":
         import cv2  # noqa: PLC0415
@@ -233,10 +246,10 @@ def detect_reference_faces(
                     f"(reference images must contain exactly one face)."
                 )
             else:
-                if path.stem in result:
-                    console.print(f"[yellow]Warning:[/yellow] {path.name} — duplicate reference name '{path.stem}', skipping (first image kept).")
-                else:
-                    result[path.stem] = faces[0].embedding
+                base = _reference_base_name(path.stem)
+                if base != path.stem:
+                    console.print(f"  [dim]{path.name} → grouped under '{base}'[/dim]")
+                result.setdefault(base, []).append(faces[0].embedding)
     else:
         import face_recognition  # noqa: PLC0415
 
@@ -257,10 +270,10 @@ def detect_reference_faces(
                     image, known_face_locations=[face_locations[0]]
                 )
                 if encodings:
-                    if path.stem in result:
-                        console.print(f"[yellow]Warning:[/yellow] {path.name} — duplicate reference name '{path.stem}', skipping (first image kept).")
-                    else:
-                        result[path.stem] = encodings[0]
+                    base = _reference_base_name(path.stem)
+                    if base != path.stem:
+                        console.print(f"  [dim]{path.name} → grouped under '{base}'[/dim]")
+                    result.setdefault(base, []).append(encodings[0])
                 else:
                     console.print(f"[yellow]Warning:[/yellow] {path.name} — encoding failed, skipping.")
 

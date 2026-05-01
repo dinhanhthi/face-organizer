@@ -10,6 +10,12 @@ pipx install face-grouper
 
 # With ArcFace support (more accurate, recommended)
 pipx install "face-grouper[arcface]"
+
+# Upgrade (core only)
+pipx upgrade face-grouper
+
+# Upgrade with ArcFace support
+pipx install "face-grouper[arcface]" --force
 ```
 
 > **Compile error?** Install CMake first: `brew install cmake` (macOS), `sudo apt install cmake build-essential` (Linux), or [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (Windows).
@@ -19,48 +25,34 @@ Don't have pipx? `brew install pipx && pipx ensurepath` (macOS) or `pip install 
 ## Usage
 
 ```bash
-# ⭐ QUICK START
-fgroup group ./photos --reference-dir ./photo_names --output ./sorted --backend arcface --mode rename --min-samples 1
+# ⭐ Quick start — named clusters, flat output, include single-photo people
+fgroup group ./photos --reference-dir ./refs --output ./sorted --backend arcface --mode rename --min-samples 1
 
-# Group into person_1/, person_2/, ... subfolders (default)
+# Basic grouping into person_1/, person_2/, ... subfolders
 fgroup group ./photos --output ./sorted
 
-# Flat output with renamed files: person_1_img_1.jpg, person_2_img_1.jpg, ...
-fgroup group ./photos --output ./sorted --mode rename
-
-# ArcFace backend — more accurate when dlib groups everyone into 1 person
-# (~300 MB model downloaded to ~/.insightface/ on first run, then cached offline)
-fgroup group ./photos --output ./sorted --backend arcface
-
-# Include people who appear in only 1 photo (default min-samples=2 sends them to unknown/)
-fgroup group ./photos --output ./sorted --backend arcface --min-samples 1
-
-# Too many groups (same person split)? raise --eps. Too few? lower it.
-fgroup group ./photos --output ./sorted --backend arcface --eps 0.6
-
-# Not sure what --eps to use? --debug prints distance distribution to guide you
-fgroup group ./photos --output ./sorted --backend arcface --debug
-
-# Preview without copying anything
-fgroup group ./photos --output ./sorted --dry-run
-
-# Name clusters after known people — place one face photo per person in a reference folder
-# (john.jpg → john/, jane.jpg → jane/; unrecognised people stay as person_N/)
-fgroup group ./photos --output ./sorted --reference-dir ./refs
-
-# Combine with rename mode for named flat files: john_img_1.jpg, jane_img_1.jpg, ...
-fgroup group ./photos --output ./sorted --mode rename --reference-dir ./refs
-
-# Pass individual files instead of a folder
+# Pass individual files
 fgroup group a.jpg b.jpg c.jpg --output ./sorted
-
-# dlib only: better detection for small/angled faces (slower)
-fgroup group ./photos --output ./sorted --model cnn --upsample 2
 ```
 
 Originals are **never** modified. Supported formats: `.jpg` `.jpeg` `.png` `.webp` `.bmp`
 
-Full option reference: `fgroup group --help`
+## Parameters
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `INPUTS...` | _(required)_ | Directories or image files to scan (recursive) |
+| `--output / -o` | _(required)_ | Output directory |
+| `--backend` | `dlib` | `dlib` (fast, 128-D) or `arcface` (accurate, 512-D, downloads ~300 MB on first run) |
+| `--mode` | `group` | `group` → `person_N/` subfolders; `rename` → flat `person_N_img_M.ext` files |
+| `--keep-originals` | `false` | Accepted for compatibility — originals are never modified in any mode |
+| `--eps` | `0.5` | DBSCAN max distance between embeddings for same person. Raise to merge split clusters, lower to split merged ones. Use `--debug` to calibrate |
+| `--min-samples` | `2` | Min photos to form a cluster. People below threshold go to `unknown/`. Set to `1` to keep solo faces |
+| `--reference-dir` | _none_ | Folder of named reference images. `john.jpg` → cluster named `john`. Multiple photos per person supported: `john_1.jpg`, `john_2.jpg`, … all map to `john` |
+| `--model` | `hog` | dlib only: `hog` (fast) or `cnn` (accurate, GPU recommended) |
+| `--upsample` | `1` | dlib only: upsample N times before detection — finds smaller faces, ~4× cost per level |
+| `--dry-run` | `false` | Preview planned operations without copying anything |
+| `--debug` | `false` | Print pairwise distance stats to help choose `--eps` |
 
 ## Dev mode
 

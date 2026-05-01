@@ -47,9 +47,10 @@ def _resolve_reference_names(
 ) -> dict[int, str]:
     """Map DBSCAN cluster labels to reference names via greedy nearest-neighbour matching.
 
-    For each reference embedding, finds the cluster whose nearest member embedding
-    is within eps distance. Greedy assignment (sorted by distance ascending) ensures
-    each cluster and each reference is used at most once.
+    For each reference name (which may have multiple embeddings from multiple photos),
+    finds the cluster whose nearest member is within eps distance of any reference photo.
+    Greedy assignment (sorted by distance ascending) ensures each cluster and each
+    reference name is used at most once.
     """
     import numpy as np
     from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
@@ -69,10 +70,12 @@ def _resolve_reference_names(
     dist_fn = cosine_distances if metric == "cosine" else euclidean_distances
 
     candidates: list[tuple[float, str, int]] = []
-    for ref_name, ref_emb in reference_embeddings.items():
-        ref_row = np.array(ref_emb).reshape(1, -1)
+    for ref_name, ref_embs in reference_embeddings.items():
+        if not ref_embs:
+            continue
+        ref_matrix = np.array(ref_embs)  # shape: (n_ref_photos, dim)
         for label, embs in cluster_embs.items():
-            dists = dist_fn(ref_row, np.array(embs))[0]
+            dists = dist_fn(ref_matrix, np.array(embs))  # shape: (n_ref_photos, n_cluster_embs)
             candidates.append((float(dists.min()), ref_name, label))
 
     candidates.sort()
@@ -201,9 +204,10 @@ def _resolve_reference_names(
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     default=None,
     help=(
-        "Directory of named reference images (one face per image). "
-        "Clusters matching a reference are named after the image stem: "
-        "e.g. 'john.jpg' → 'john/' in group mode or 'john_001.jpg' in rename mode."
+        "Directory of named reference images. Clusters matching a reference are named "
+        "after the image stem: e.g. 'john.jpg' → 'john/' in group mode. "
+        "Multiple photos per person are supported via a _N suffix: "
+        "'john_1.jpg', 'john_2.jpg', ... all map to 'john'."
     ),
 )
 def group_command(
@@ -268,21 +272,22 @@ def group_command(
             if len(image_paths) < before:
                 console.print(f"  [dim]Excluded {before - len(image_paths)} reference image(s) from main scan.[/dim]")
 
+            # Validate reserved names from filenames before running expensive detection
+            potential_names = {(_re.sub(r"_\d+$", "", p.stem) or p.stem) for p in ref_paths}
+            reserved_conflicts = {
+                name for name in potential_names
+                if name == "unknown" or _re.match(r"^person_\d+$", name)
+            }
+            if reserved_conflicts:
+                raise click.UsageError(
+                    f"Reference image name(s) conflict with reserved names: "
+                    f"{', '.join(sorted(reserved_conflicts))}. "
+                    f"Rename them to avoid 'unknown' and 'person_N' patterns."
+                )
+
             console.print(f"Loading reference faces from [cyan]{len(ref_paths)}[/cyan] image(s) in {reference_dir}...")
             reference_embeddings = detect_reference_faces(
                 ref_paths, backend=backend, model=model, upsample=upsample
-            )
-
-        # Validate stems don't collide with reserved names used by the organizer
-        reserved_conflicts = {
-            stem for stem in reference_embeddings
-            if stem == "unknown" or _re.match(r"^person_\d+$", stem)
-        }
-        if reserved_conflicts:
-            raise click.UsageError(
-                f"Reference image name(s) conflict with reserved names: "
-                f"{', '.join(sorted(reserved_conflicts))}. "
-                f"Rename them to avoid 'unknown' and 'person_N' patterns."
             )
 
         if not reference_embeddings:
@@ -291,8 +296,12 @@ def group_command(
                 "clusters will use default person_N naming."
             )
         else:
+            total_photos = sum(len(v) for v in reference_embeddings.values())
             names = ", ".join(f"[bold]{n}[/bold]" for n in sorted(reference_embeddings))
-            console.print(f"Loaded [cyan]{len(reference_embeddings)}[/cyan] reference face(s): {names}")
+            console.print(
+                f"Loaded [cyan]{len(reference_embeddings)}[/cyan] person(s) from "
+                f"[cyan]{total_photos}[/cyan] reference photo(s): {names}"
+            )
 
     # --- 2. Overwrite check ---
     if (
