@@ -71,3 +71,31 @@ pip install -e .
 ```
 
 Changes to `face_grouper/*.py` take effect immediately — no reinstall needed. Only re-run `pip install -e .` if you change `pyproject.toml` (e.g. new dependency or entry point).
+
+### Build & publish
+
+```bash
+# One time setup
+# Create an account on https://pypi.org and generate a token, then
+cp .pypirc.example ~/.pypirc
+# then edit ~/.pypirc and replace pypi-xxx with your actual token
+```
+
+> `username` must stay as `__token__`. Never commit `~/.pypirc`.
+
+**Build and upload:**
+
+```bash
+pip install build twine
+rm -rf dist/ build/      # clean previous artifacts
+python -m build          # creates dist/*.whl and dist/*.tar.gz
+twine upload dist/*
+```
+
+**Releasing an update** — bump `version` in `pyproject.toml` first, then repeat the build and upload steps above. PyPI does not allow re-uploading the same version.
+
+**Users upgrading:**
+
+```bash
+pipx upgrade face-grouper
+```

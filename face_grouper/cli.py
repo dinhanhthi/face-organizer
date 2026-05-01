@@ -239,6 +239,17 @@ def group_command(
 
     image_paths = scan_images(list(inputs))
 
+    # Exclude files that live inside the output directory so that a previous run's
+    # output is never re-processed (which would silently duplicate every face).
+    output_resolved = output.resolve()
+    pre_exclude = len(image_paths)
+    image_paths = [p for p in image_paths if not p.is_relative_to(output_resolved)]
+    if len(image_paths) < pre_exclude:
+        console.print(
+            f"  [dim]Excluded {pre_exclude - len(image_paths)} file(s) already inside "
+            f"the output directory (from a previous run).[/dim]"
+        )
+
     if not image_paths:
         raise click.UsageError("No supported image files found in the provided inputs.")
 
