@@ -19,6 +19,9 @@ Don't have pipx? `brew install pipx && pipx ensurepath` (macOS) or `pip install 
 ## Usage
 
 ```bash
+# ⭐ QUICK START
+fgroup group ./photos --reference-dir ./photo_names --output ./sorted --backend arcface --mode rename --min-samples 1
+
 # Group into person_1/, person_2/, ... subfolders (default)
 fgroup group ./photos --output ./sorted
 
@@ -40,6 +43,13 @@ fgroup group ./photos --output ./sorted --backend arcface --debug
 
 # Preview without copying anything
 fgroup group ./photos --output ./sorted --dry-run
+
+# Name clusters after known people — place one face photo per person in a reference folder
+# (john.jpg → john/, jane.jpg → jane/; unrecognised people stay as person_N/)
+fgroup group ./photos --output ./sorted --reference-dir ./refs
+
+# Combine with rename mode for named flat files: john_img_1.jpg, jane_img_1.jpg, ...
+fgroup group ./photos --output ./sorted --mode rename --reference-dir ./refs
 
 # Pass individual files instead of a folder
 fgroup group a.jpg b.jpg c.jpg --output ./sorted

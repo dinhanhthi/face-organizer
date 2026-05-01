@@ -66,3 +66,5 @@ docs/context/
 CLAUDE.md
 .claude/
 docs/
+
+.pypirc

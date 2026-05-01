@@ -41,6 +41,7 @@ def organize(
     output_dir: Path,
     mode: str,
     dry_run: bool,
+    name_map: dict[int, str] | None = None,
 ) -> None:
     """Copy images into organised output according to mode.
 
@@ -55,7 +56,14 @@ def organize(
         output_dir: Root output directory.
         mode: "group" or "rename".
         dry_run: If True, print table only — no file copies.
+        name_map: Optional mapping from DBSCAN label → display name (e.g. "john").
+            When provided, matched clusters use this name instead of "person_N".
     """
+    _names = name_map or {}
+
+    def _label_name(label: int) -> str:
+        return _names.get(label, f"person_{label_map[label]}")
+
     # Build plan: list of (source, destination) pairs
     plan: list[tuple[Path, Path]] = []
 
@@ -69,8 +77,7 @@ def organize(
             if label == -1 or label not in label_map:
                 subdir = output_dir / "unknown"
             else:
-                person_num = label_map[label]
-                subdir = output_dir / f"person_{person_num}"
+                subdir = output_dir / _label_name(label)
 
             dest = _collision_free_path(subdir, img_path.stem, img_path.suffix, planned)
             planned.add(dest)
@@ -101,7 +108,7 @@ def organize(
             prefix = (
                 "unknown"
                 if (label == -1 or label not in label_map)
-                else f"person_{label_map[label]}"
+                else _label_name(label)
             )
             dest = _next_rename_dest(prefix, img_path.suffix.lower())
             rename_taken.add(dest)

@@ -3,7 +3,10 @@
 from pathlib import Path
 
 import numpy as np
+from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+
+console = Console()
 
 
 def _face_area(loc: tuple[int, int, int, int]) -> int:
@@ -160,7 +163,7 @@ def detect_faces(
     - "dlib": uses face_recognition library, produces 128-D embeddings.
     - "arcface": uses DeepFace+RetinaFace+ArcFace, produces 512-D embeddings.
       Requires the optional 'arcface' extra: pip install 'face-grouper[arcface]'.
-      Downloads ~300 MB model to ~/.deepface/ on first run.
+      Downloads ~300 MB model to ~/.insightface/ on first run.
 
     When multiple faces are found in an image, picks the one with the largest
     bounding box. Images with no detected faces are collected separately.
@@ -184,3 +187,81 @@ def detect_faces(
     if backend.lower() == "arcface":
         return _detect_arcface(image_paths)
     return _detect_dlib(image_paths, model=model, upsample=upsample)
+
+
+def detect_reference_faces(
+    image_paths: list[Path],
+    backend: str = "dlib",
+    model: str = "hog",
+    upsample: int = 1,
+) -> dict[str, np.ndarray]:
+    """Detect exactly one face per reference image and return a name → embedding mapping.
+
+    Images with zero or more than one face are skipped with a warning printed to console.
+    Must be called with the same backend/model/upsample settings as the main detection run
+    so that embedding spaces are compatible.
+
+    Args:
+        image_paths: Reference image paths (typically from a --reference-dir scan).
+        backend: "dlib" or "arcface" — must match the backend used for main detection.
+        model: dlib detection model ("hog" or "cnn"). Ignored for arcface.
+        upsample: Upsample factor for dlib. Ignored for arcface.
+
+    Returns:
+        Mapping from image stem (filename without extension) to embedding array.
+    """
+    result: dict[str, np.ndarray] = {}
+
+    if backend.lower() == "arcface":
+        import cv2  # noqa: PLC0415
+        from insightface.app import FaceAnalysis  # noqa: PLC0415
+
+        app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+        app.prepare(ctx_id=0, det_size=(640, 640))
+
+        for path in image_paths:
+            img = cv2.imread(str(path))
+            if img is None:
+                console.print(f"[yellow]Warning:[/yellow] {path.name} — could not load image, skipping.")
+                continue
+            faces = app.get(img)
+            if len(faces) == 0:
+                console.print(f"[yellow]Warning:[/yellow] {path.name} — no face detected, skipping.")
+            elif len(faces) > 1:
+                console.print(
+                    f"[yellow]Warning:[/yellow] {path.name} — {len(faces)} faces detected, skipping "
+                    f"(reference images must contain exactly one face)."
+                )
+            else:
+                if path.stem in result:
+                    console.print(f"[yellow]Warning:[/yellow] {path.name} — duplicate reference name '{path.stem}', skipping (first image kept).")
+                else:
+                    result[path.stem] = faces[0].embedding
+    else:
+        import face_recognition  # noqa: PLC0415
+
+        for path in image_paths:
+            image = face_recognition.load_image_file(str(path))
+            face_locations = face_recognition.face_locations(
+                image, number_of_times_to_upsample=upsample, model=model
+            )
+            if len(face_locations) == 0:
+                console.print(f"[yellow]Warning:[/yellow] {path.name} — no face detected, skipping.")
+            elif len(face_locations) > 1:
+                console.print(
+                    f"[yellow]Warning:[/yellow] {path.name} — {len(face_locations)} faces detected, skipping "
+                    f"(reference images must contain exactly one face)."
+                )
+            else:
+                encodings = face_recognition.face_encodings(
+                    image, known_face_locations=[face_locations[0]]
+                )
+                if encodings:
+                    if path.stem in result:
+                        console.print(f"[yellow]Warning:[/yellow] {path.name} — duplicate reference name '{path.stem}', skipping (first image kept).")
+                    else:
+                        result[path.stem] = encodings[0]
+                else:
+                    console.print(f"[yellow]Warning:[/yellow] {path.name} — encoding failed, skipping.")
+
+    return result
