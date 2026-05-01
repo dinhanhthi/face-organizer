@@ -1,6 +1,12 @@
-# face-organizer
+<p align="center">
+  <img src="logo.png" alt="face-organizer Logo" width="100" />
+</p>
 
-A CLI tool that groups photos by person using offline face recognition.
+<h1 align="center">face-organizer</h1>
+
+<p align="center">
+  A CLI tool that groups photos by person using offline face recognition.
+</p>
 
 ## Installation
 
