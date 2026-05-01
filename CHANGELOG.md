@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-01
+
+### Fixed
+- GitHub Actions publish workflow now skips already-uploaded files to PyPI instead of failing (`skip_existing: true`)
+- GitHub Actions automatically creates a GitHub Release with CHANGELOG notes on tag push
+
 ## [0.1.0] - 2026-05-01
 
 ### Added
