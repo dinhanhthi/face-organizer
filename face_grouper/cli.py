@@ -210,6 +210,16 @@ def _resolve_reference_names(
         "'john_1.jpg', 'john_2.jpg', ... all map to 'john'."
     ),
 )
+@click.option(
+    "--no-multi-export",
+    is_flag=True,
+    default=False,
+    help=(
+        "Only use the largest detected face per photo (legacy behaviour). "
+        "By default every detected face in a photo is exported independently, "
+        "so a photo with two people lands in both person folders."
+    ),
+)
 def group_command(
     inputs: tuple[Path, ...],
     output: Path,
@@ -223,6 +233,7 @@ def group_command(
     dry_run: bool,
     debug: bool,
     reference_dir: Path | None,
+    no_multi_export: bool,
 ) -> None:
     """Scan INPUTS for images, detect faces, cluster by person, and organise output.
 
@@ -319,13 +330,20 @@ def group_command(
     # --- 3. Detect faces ---
     console.print("\nStep 1/3 — Face detection")
     embeddings, embedded_paths, no_face_paths = detect_faces(
-        image_paths, model=model, upsample=upsample, backend=backend
+        image_paths, model=model, upsample=upsample, backend=backend,
+        multi_face=not no_multi_export,
     )
 
+    n_unique = len(set(embedded_paths))
     console.print(
-        f"  [green]{len(embedded_paths)}[/green] image(s) with faces, "
+        f"  [green]{len(embedded_paths)}[/green] face(s) across "
+        f"[green]{n_unique}[/green] image(s) with faces, "
         f"[yellow]{len(no_face_paths)}[/yellow] without."
     )
+    if len(embedded_paths) > n_unique:
+        console.print(
+            "  [dim](multi-face export ON — use --no-multi-export to disable)[/dim]"
+        )
 
     # --- 4. Cluster ---
     console.print("\nStep 2/3 — Clustering")

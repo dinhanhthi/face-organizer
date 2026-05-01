@@ -33,6 +33,9 @@ fgroup group ./photos --output ./sorted
 
 # Pass individual files
 fgroup group a.jpg b.jpg c.jpg --output ./sorted
+
+# Disable multi-face export (legacy: one output per photo)
+fgroup group ./photos --output ./sorted --no-multi-export
 ```
 
 Originals are **never** modified. Supported formats: `.jpg` `.jpeg` `.png` `.webp` `.bmp`
@@ -49,6 +52,7 @@ Originals are **never** modified. Supported formats: `.jpg` `.jpeg` `.png` `.web
 | `--eps` | `0.5` | DBSCAN max distance between embeddings for same person. Raise to merge split clusters, lower to split merged ones. Use `--debug` to calibrate |
 | `--min-samples` | `2` | Min photos to form a cluster. People below threshold go to `unknown/`. Set to `1` to keep solo faces |
 | `--reference-dir` | _none_ | Folder of named reference images. `john.jpg` → cluster named `john`. Multiple photos per person supported: `john_1.jpg`, `john_2.jpg`, … all map to `john` |
+| `--no-multi-export` | `false` | Only use the largest face per photo. By default every detected face is exported independently — a photo with two people lands in both person folders. |
 | `--model` | `hog` | dlib only: `hog` (fast) or `cnn` (accurate, GPU recommended) |
 | `--upsample` | `1` | dlib only: upsample N times before detection — finds smaller faces, ~4× cost per level |
 | `--dry-run` | `false` | Preview planned operations without copying anything |
@@ -63,31 +67,3 @@ pip install -e .
 ```
 
 Changes to `face_grouper/*.py` take effect immediately — no reinstall needed. Only re-run `pip install -e .` if you change `pyproject.toml` (e.g. new dependency or entry point).
-
-### Build & publish
-
-```bash
-# One time setup
-# Create an account on https://pypi.org and generate a token, then
-cp .pypirc.example ~/.pypirc
-# then edit ~/.pypirc and replace pypi-xxx with your actual token
-```
-
-> `username` must stay as `__token__`. Never commit `~/.pypirc`.
-
-**Build and upload:**
-
-```bash
-pip install build twine
-rm -rf dist/ build/      # clean previous artifacts
-python -m build          # creates dist/*.whl and dist/*.tar.gz
-twine upload dist/*
-```
-
-**Releasing an update** — bump `version` in `pyproject.toml` first, then repeat the build and upload steps above. PyPI does not allow re-uploading the same version.
-
-**Users upgrading:**
-
-```bash
-pipx upgrade face-grouper
-```

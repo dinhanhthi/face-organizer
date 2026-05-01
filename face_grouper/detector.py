@@ -20,21 +20,27 @@ def _detect_dlib(
     image_paths: list[Path],
     model: str = "hog",
     upsample: int = 1,
+    multi_face: bool = True,
 ) -> tuple[list[np.ndarray], list[Path], list[Path]]:
     """Detect faces using dlib/face_recognition and extract 128-D embeddings.
 
-    When multiple faces are found, picks the one with the largest bounding box.
-    Images with no detected faces are collected separately.
+    When multi_face is False and multiple faces are found, picks the one with the
+    largest bounding box. When multi_face is True, extracts all detected faces,
+    yielding one (embedding, path) pair per face. Images with no detected faces
+    are collected separately.
 
     Args:
         image_paths: List of image file paths to process.
         model: Detection model — "hog" (fast) or "cnn" (accurate, GPU recommended).
         upsample: Number of times to upsample before detection; higher finds smaller faces.
+        multi_face: When True, extract all faces per image (one embedding per face).
+            When False, extract only the largest face per image.
 
     Returns:
         A tuple of:
-        - embeddings: List of 128-D numpy arrays, one per image with a face.
-        - embedded_paths: Paths corresponding to each embedding.
+        - embeddings: List of 128-D numpy arrays, one per detected face.
+        - embedded_paths: Paths corresponding to each embedding (may contain duplicates
+            when multi_face is True and an image has multiple faces).
         - no_face_paths: Paths of images where no face was detected.
     """
     import face_recognition  # noqa: PLC0415 — deferred to avoid import cost
@@ -67,22 +73,37 @@ def _detect_dlib(
                 progress.advance(task)
                 continue
 
-            if len(face_locations) == 1:
-                largest_location = face_locations[0]
+            if multi_face:
+                # Encode all detected faces; zip is length-safe (face_recognition
+                # can return fewer encodings than locations in rare edge cases).
+                encodings = face_recognition.face_encodings(
+                    image, known_face_locations=face_locations
+                )
+                added = 0
+                for _loc, encoding in zip(face_locations, encodings):
+                    embeddings.append(encoding)
+                    embedded_paths.append(image_path)
+                    added += 1
+                if added == 0:
+                    # Detection found faces but encoding failed for all of them.
+                    no_face_paths.append(image_path)
             else:
-                # Pick face with largest bounding-box area
-                largest_location = max(face_locations, key=_face_area)
+                if len(face_locations) == 1:
+                    largest_location = face_locations[0]
+                else:
+                    # Pick face with largest bounding-box area
+                    largest_location = max(face_locations, key=_face_area)
 
-            # Encode only the selected face for efficiency
-            encodings = face_recognition.face_encodings(
-                image, known_face_locations=[largest_location]
-            )
+                # Encode only the selected face for efficiency
+                encodings = face_recognition.face_encodings(
+                    image, known_face_locations=[largest_location]
+                )
 
-            if encodings:
-                embeddings.append(encodings[0])
-                embedded_paths.append(image_path)
-            else:
-                no_face_paths.append(image_path)
+                if encodings:
+                    embeddings.append(encodings[0])
+                    embedded_paths.append(image_path)
+                else:
+                    no_face_paths.append(image_path)
 
             progress.advance(task)
 
@@ -91,22 +112,28 @@ def _detect_dlib(
 
 def _detect_arcface(
     image_paths: list[Path],
+    multi_face: bool = True,
 ) -> tuple[list[np.ndarray], list[Path], list[Path]]:
     """Detect faces using insightface (RetinaFace+ArcFace) and extract 512-D embeddings.
 
     Uses ONNX runtime — no TensorFlow required. Downloads ~300 MB buffalo_l model
     to ~/.insightface/ on first run.
 
-    When multiple faces are found, picks the one with the largest bounding box area.
-    Images with no detected faces are collected separately.
+    When multi_face is False and multiple faces are found, picks the one with the
+    largest bounding box area. When multi_face is True, extracts all detected faces,
+    yielding one (embedding, path) pair per face. Images with no detected faces
+    are collected separately.
 
     Args:
         image_paths: List of image file paths to process.
+        multi_face: When True, extract all faces per image (one embedding per face).
+            When False, extract only the largest face per image.
 
     Returns:
         A tuple of:
-        - embeddings: List of 512-D numpy arrays, one per image with a face.
-        - embedded_paths: Paths corresponding to each embedding.
+        - embeddings: List of 512-D numpy arrays, one per detected face.
+        - embedded_paths: Paths corresponding to each embedding (may contain duplicates
+            when multi_face is True and an image has multiple faces).
         - no_face_paths: Paths of images where no face was detected.
     """
     import cv2  # noqa: PLC0415
@@ -141,6 +168,11 @@ def _detect_arcface(
             faces = app.get(img)
             if not faces:
                 no_face_paths.append(image_path)
+            elif multi_face:
+                # Each Face object already has .embedding computed by app.get().
+                for face in faces:
+                    embeddings.append(face.embedding)
+                    embedded_paths.append(image_path)
             else:
                 # bbox is [x1, y1, x2, y2]
                 largest = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
@@ -157,6 +189,7 @@ def detect_faces(
     model: str = "hog",
     upsample: int = 1,
     backend: str = "dlib",
+    multi_face: bool = True,
 ) -> tuple[list[np.ndarray], list[Path], list[Path]]:
     """Detect faces in images and extract embeddings.
 
@@ -166,8 +199,10 @@ def detect_faces(
       Requires the optional 'arcface' extra: pip install 'face-grouper[arcface]'.
       Downloads ~300 MB model to ~/.insightface/ on first run.
 
-    When multiple faces are found in an image, picks the one with the largest
-    bounding box. Images with no detected faces are collected separately.
+    When multi_face is False and multiple faces are found in an image, picks the
+    one with the largest bounding box. When multi_face is True (default), all
+    detected faces are extracted — embedded_paths may contain the same path
+    multiple times, once per face found in that image.
 
     Args:
         image_paths: List of image file paths to process.
@@ -177,17 +212,21 @@ def detect_faces(
             higher finds smaller faces. Ignored when backend is "arcface".
         backend: Face recognition backend — "dlib" (default, 128-D) or "arcface"
             (more accurate, 512-D).
+        multi_face: When True (default), extract all faces per image, yielding one
+            embedding per detected face. When False, extract only the largest face
+            per image (original behaviour).
 
     Returns:
         A tuple of:
         - embeddings: List of numpy arrays (128-D for dlib, 512-D for arcface),
-            one per image with a face.
-        - embedded_paths: Paths corresponding to each embedding.
+            one per detected face.
+        - embedded_paths: Paths corresponding to each embedding. When multi_face
+            is True, the same path may appear multiple times (once per face).
         - no_face_paths: Paths of images where no face was detected.
     """
     if backend.lower() == "arcface":
-        return _detect_arcface(image_paths)
-    return _detect_dlib(image_paths, model=model, upsample=upsample)
+        return _detect_arcface(image_paths, multi_face=multi_face)
+    return _detect_dlib(image_paths, model=model, upsample=upsample, multi_face=multi_face)
 
 
 def _reference_base_name(stem: str) -> str:
