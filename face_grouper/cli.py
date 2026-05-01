@@ -228,6 +228,17 @@ def _resolve_reference_names(
         "so a photo with two people lands in both person folders."
     ),
 )
+@click.option(
+    "--start-index",
+    type=int,
+    default=1,
+    show_default=True,
+    help=(
+        "Starting index for file counters in rename mode (e.g. --start-index 10 "
+        "produces person_N_img_10.ext, person_N_img_11.ext, ...). "
+        "Ignored in group mode."
+    ),
+)
 def group_command(
     inputs: tuple[Path, ...],
     output: Path,
@@ -241,6 +252,7 @@ def group_command(
     debug: bool,
     ref_dir: Path | None,
     no_multi_export: bool,
+    start_index: int,
 ) -> None:
     """Scan INPUTS for images, detect faces, cluster by person, and organise output.
 
@@ -416,6 +428,7 @@ def group_command(
         mode=mode,
         dry_run=dry_run,
         name_map=name_map or None,
+        start_index=start_index,
     )
 
 
@@ -536,6 +549,17 @@ def group_command(
         "Use this to find a good --eps value for your video set."
     ),
 )
+@click.option(
+    "--start-index",
+    type=int,
+    default=1,
+    show_default=True,
+    help=(
+        "Starting index for file counters in rename mode (e.g. --start-index 10 "
+        "produces person_N_vid_10.ext, person_N_vid_11.ext, ...). "
+        "Ignored in group mode."
+    ),
+)
 def video_command(
     inputs: tuple[Path, ...],
     output: Path,
@@ -549,6 +573,7 @@ def video_command(
     ref_dir: Path | None,
     dry_run: bool,
     debug: bool,
+    start_index: int,
 ) -> None:
     """Scan INPUTS for videos, detect faces, cluster by person, and organise output.
 
@@ -732,4 +757,5 @@ def video_command(
         mode=mode,
         dry_run=dry_run,
         name_map=name_map or None,
+        start_index=start_index,
     )

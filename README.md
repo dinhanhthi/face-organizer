@@ -73,39 +73,34 @@ Videos exceeding `--max-duration` are skipped and copied to `output/skipped/`. A
 
 ## Parameters
 
-### `fgroup group`
+### Common parameters (`fgroup group` and `fgroup video`)
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `INPUTS...` | _(required)_ | Directories or image files to scan (recursive) |
+| `INPUTS...` | _(required)_ | Directories or files to scan (recursive) |
 | `--output / -o` | _(required)_ | Output directory |
 | `--backend` | `dlib` | Face recognition backend. `dlib`: fast, 128-D embeddings, works offline, good for frontal faces — pair with `--model cnn` for better accuracy. `arcface`: 512-D embeddings, more accurate across varied lighting/angles, but downloads around 300 MB (`buffalo_l` model) on first run to `~/.insightface/`; `--model` and `--upsample` are ignored for this backend |
-| `--mode` | `group` | `group` → `person_N/` subfolders; `rename` → flat `person_N_img_M.ext` files |
+| `--mode` | `group` | `group` → `person_N/` subfolders; `rename` → flat files with sequential index |
+| `--start-index` | `1` | Starting index for file counters in rename mode (e.g. `--start-index 10` → `person_N_img_10.ext`, `person_N_img_11.ext`, …). Ignored in group mode |
 | `--eps` | `0.5` | DBSCAN max distance between embeddings for same person. Raise to merge split clusters, lower to split merged ones. Use `--debug` to calibrate |
-| `--min-samples` | `2` | Min photos to form a cluster. People below threshold go to `unknown/`. Set to `1` to keep solo faces |
+| `--min-samples` | `2` | Min detections to form a cluster. People below threshold go to `unknown/`. Set to `1` to keep solo faces |
 | `--ref-dir` | _none_ | Folder of named reference images. `john.jpg` → cluster named `john`. Multiple photos per person supported: `john_1.jpg`, `john_2.jpg`, … all map to `john` |
-| `--no-multi-export` | `false` | Only use the largest face per photo. By default every detected face is exported independently — a photo with two people lands in both person folders. |
 | `--model` | `hog` | dlib only: `hog` (fast) or `cnn` (accurate, GPU recommended) |
 | `--upsample` | `1` | dlib only: upsample N times before detection — finds smaller faces, ~4× cost per level |
 | `--dry-run` | `false` | Preview planned operations without copying anything |
 | `--debug` | `false` | Print pairwise distance stats to help choose `--eps` |
 
-### `fgroup video`
+### `fgroup group` specific
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `INPUTS...` | _(required)_ | Directories or video files to scan (recursive) |
-| `--output / -o` | _(required)_ | Output directory |
-| `--mode` | `group` | `group` → `person_N/` subfolders; `rename` → flat `person_N_vid_M.ext` files |
-| `--backend` | `dlib` | `dlib` or `arcface` — same as `fgroup group` |
-| `--model` | `hog` | dlib only: `hog` or `cnn` |
-| `--upsample` | `1` | dlib only: upsample N times before detection |
-| `--eps` | `0.5` | DBSCAN epsilon — same as `fgroup group` |
-| `--min-samples` | `2` | Min face detections to form a cluster |
-| `--ref-dir` | _none_ | Folder of named reference images — same behaviour as `fgroup group` |
+| `--no-multi-export` | `false` | Only use the largest face per photo. By default every detected face is exported independently — a photo with two people lands in both person folders |
+
+### `fgroup video` specific
+
+| Option | Default | Description |
+|--------|---------|-------------|
 | `--max-duration` | `15.0` | Max video length in seconds (1–120). Videos over this go to `skipped/`. Warns if > 30s |
-| `--dry-run` | `false` | Preview planned operations without copying anything |
-| `--debug` | `false` | Print pairwise distance stats to help choose `--eps` |
 
 ## Dev mode
 

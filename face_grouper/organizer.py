@@ -42,6 +42,7 @@ def organize(
     mode: str,
     dry_run: bool,
     name_map: dict[int, str] | None = None,
+    start_index: int = 1,
 ) -> None:
     """Copy images into organised output according to mode.
 
@@ -97,7 +98,7 @@ def organize(
         rename_taken: set[Path] = set()
 
         def _next_rename_dest(prefix: str, suffix: str) -> Path:
-            person_counters.setdefault(prefix, 0)
+            person_counters.setdefault(prefix, start_index - 1)
             while True:
                 person_counters[prefix] += 1
                 candidate = output_dir / f"{prefix}_img_{person_counters[prefix]}{suffix}"

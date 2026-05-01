@@ -20,6 +20,7 @@ def organize_videos(
     mode: str,
     dry_run: bool,
     name_map: dict[int, str] | None = None,
+    start_index: int = 1,
 ) -> None:
     """Copy videos into organised output folders grouped by detected person.
 
@@ -82,7 +83,7 @@ def organize_videos(
         rename_taken: set[Path] = set()
 
         def _next_rename_dest(prefix: str, suffix: str) -> Path:
-            person_counters.setdefault(prefix, 0)
+            person_counters.setdefault(prefix, start_index - 1)
             while True:
                 person_counters[prefix] += 1
                 candidate = output_dir / f"{prefix}_vid_{person_counters[prefix]}{suffix}"
