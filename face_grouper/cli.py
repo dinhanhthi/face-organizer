@@ -16,13 +16,29 @@ Examples:
 
   face-grouper group ./photos --output ./sorted --mode rename
 
-  face-grouper group ./photos --output ./sorted --mode rename --keep-originals
-
   face-grouper group img1.jpg img2.jpg img3.jpg --output ./sorted
 
   face-grouper group ./photos --output ./sorted --eps 0.45
 
   face-grouper group ./photos --output ./sorted --dry-run
+"""
+
+_VIDEO_EPILOG = """
+Examples:
+
+  fgroup video ./clips --output ./sorted
+
+  fgroup video ./clips --output ./sorted --mode rename
+
+  fgroup video ./clips --output ./sorted --backend arcface
+
+  fgroup video ./clips --output ./sorted --max-duration 30
+
+  fgroup video ./clips --output ./sorted --dry-run
+
+  fgroup video clip1.mp4 clip2.mp4 --output ./sorted
+
+Note: requires opencv-python — install with:  pip install 'face-grouper[video]'
 """
 
 
@@ -122,15 +138,6 @@ def _resolve_reference_names(
     ),
 )
 @click.option(
-    "--keep-originals",
-    is_flag=True,
-    default=False,
-    help=(
-        "Accepted for compatibility. Originals are NEVER modified in any mode; "
-        "this flag has no additional effect."
-    ),
-)
-@click.option(
     "--backend",
     type=click.Choice(["dlib", "arcface"], case_sensitive=False),
     default="dlib",
@@ -200,6 +207,7 @@ def _resolve_reference_names(
     ),
 )
 @click.option(
+    "--ref-dir",
     "--reference-dir",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     default=None,
@@ -224,7 +232,6 @@ def group_command(
     inputs: tuple[Path, ...],
     output: Path,
     mode: str,
-    keep_originals: bool,
     backend: str,
     model: str,
     upsample: int,
@@ -232,7 +239,7 @@ def group_command(
     min_samples: int,
     dry_run: bool,
     debug: bool,
-    reference_dir: Path | None,
+    ref_dir: Path | None,
     no_multi_export: bool,
 ) -> None:
     """Scan INPUTS for images, detect faces, cluster by person, and organise output.
@@ -273,8 +280,8 @@ def group_command(
     # --- 1b. Load reference embeddings ---
     import re as _re
     reference_embeddings: dict = {}
-    if reference_dir is not None:
-        ref_paths = scan_images([reference_dir])
+    if ref_dir is not None:
+        ref_paths = scan_images([ref_dir])
         if ref_paths:
             # Exclude reference images from the main scan to avoid double-processing
             ref_paths_set = set(ref_paths)
@@ -296,7 +303,7 @@ def group_command(
                     f"Rename them to avoid 'unknown' and 'person_N' patterns."
                 )
 
-            console.print(f"Loading reference faces from [cyan]{len(ref_paths)}[/cyan] image(s) in {reference_dir}...")
+            console.print(f"Loading reference faces from [cyan]{len(ref_paths)}[/cyan] image(s) in {ref_dir}...")
             reference_embeddings = detect_reference_faces(
                 ref_paths, backend=backend, model=model, upsample=upsample
             )
@@ -403,6 +410,322 @@ def group_command(
     organize(
         image_paths=embedded_paths,
         no_face_paths=no_face_paths,
+        labels=labels,
+        label_map=label_map,
+        output_dir=output,
+        mode=mode,
+        dry_run=dry_run,
+        name_map=name_map or None,
+    )
+
+
+@cli.command(name="video", epilog=_VIDEO_EPILOG)
+@click.argument(
+    "inputs",
+    nargs=-1,
+    type=click.Path(exists=True, path_type=Path),
+    metavar="INPUTS...",
+)
+@click.option(
+    "--output",
+    "-o",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory where organised videos will be written.",
+)
+@click.option(
+    "--mode",
+    type=click.Choice(["group", "rename"], case_sensitive=False),
+    default="group",
+    show_default=True,
+    help=(
+        "Organisation mode. "
+        "'group' copies videos into person_N/ subfolders. "
+        "'rename' copies videos to the output root with person_N_vid_M.ext names. "
+        "A video with multiple people is copied once per person in both modes."
+    ),
+)
+@click.option(
+    "--backend",
+    type=click.Choice(["dlib", "arcface"], case_sensitive=False),
+    default="dlib",
+    show_default=True,
+    help=(
+        "Face recognition backend. "
+        "'dlib' uses face_recognition (fast, 128-D embeddings). "
+        "'arcface' uses insightface+RetinaFace (more accurate, 512-D embeddings, "
+        "downloads ~300 MB model on first run)."
+    ),
+)
+@click.option(
+    "--model",
+    type=click.Choice(["hog", "cnn"], case_sensitive=False),
+    default="hog",
+    show_default=True,
+    help=(
+        "Face detection model for dlib backend. "
+        "'hog' is fast but misses non-frontal or small faces. "
+        "'cnn' is much more accurate but significantly slower (GPU recommended). "
+        "Ignored when --backend is arcface."
+    ),
+)
+@click.option(
+    "--upsample",
+    type=int,
+    default=1,
+    show_default=True,
+    help=(
+        "How many times to upsample frames before detection (dlib backend only). "
+        "Higher values find smaller faces but use more memory and time."
+    ),
+)
+@click.option(
+    "--eps",
+    type=float,
+    default=0.5,
+    show_default=True,
+    help=(
+        "DBSCAN epsilon: maximum distance between two face embeddings to be "
+        "considered the same person. Lower values = stricter grouping."
+    ),
+)
+@click.option(
+    "--min-samples",
+    type=int,
+    default=2,
+    show_default=True,
+    help=(
+        "Minimum number of face detections needed to form a person cluster. "
+        "Set to 1 to keep every detected face as its own group."
+    ),
+)
+@click.option(
+    "--max-duration",
+    type=click.FloatRange(1.0, 120.0),
+    default=15.0,
+    show_default=True,
+    help=(
+        "Maximum video duration in seconds. Videos longer than this are skipped "
+        "and copied to output/skipped/. Range: 1–120 seconds."
+    ),
+)
+@click.option(
+    "--ref-dir",
+    "--reference-dir",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
+    help=(
+        "Directory of named reference images. Clusters matching a reference are named "
+        "after the image stem: e.g. 'john.jpg' → 'john/'. "
+        "Multiple photos per person are supported via a _N suffix: "
+        "'john_1.jpg', 'john_2.jpg', ... all map to 'john'."
+    ),
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Preview the planned file operations without copying anything.",
+)
+@click.option(
+    "--debug",
+    is_flag=True,
+    default=False,
+    help=(
+        "Print pairwise embedding distance statistics after detection. "
+        "Use this to find a good --eps value for your video set."
+    ),
+)
+def video_command(
+    inputs: tuple[Path, ...],
+    output: Path,
+    backend: str,
+    model: str,
+    upsample: int,
+    eps: float,
+    min_samples: int,
+    max_duration: float,
+    mode: str,
+    ref_dir: Path | None,
+    dry_run: bool,
+    debug: bool,
+) -> None:
+    """Scan INPUTS for videos, detect faces, cluster by person, and organise output.
+
+    INPUTS can be directories (scanned recursively) or individual video files,
+    or a mix of both. Supported formats: .mp4 .mov .avi .mkv
+
+    Frames are sampled at 1 fps. Videos with detected faces are grouped into
+    person_N/ folders. A video with multiple people is copied into each relevant folder.
+    Videos exceeding --max-duration are skipped and copied to output/skipped/.
+
+    Requires opencv-python: pip install 'face-grouper[video]'
+    """
+    from face_grouper.clusterer import cluster_embeddings, embedding_distance_stats, relabel_by_frequency
+    from face_grouper.detector import detect_reference_faces, detect_video_faces
+    from face_grouper.video_organizer import organize_videos
+    from face_grouper.video_scanner import scan_videos
+
+    # --- 1. Collect inputs ---
+    if not inputs:
+        raise click.UsageError("No inputs provided. Pass files or directories.")
+
+    console.print(f"[bold]face-grouper[/bold] v{__version__}")
+
+    if max_duration > 30:
+        console.print(
+            f"[yellow]Warning:[/yellow] --max-duration {max_duration}s is greater than 30s. "
+            "Processing may be slow for longer videos."
+        )
+    console.print(f"Scanning {len(inputs)} input(s) for videos...")
+
+    video_paths = scan_videos(list(inputs))
+
+    # Exclude files inside the output directory to avoid re-processing previous output
+    output_resolved = output.resolve()
+    pre_exclude = len(video_paths)
+    video_paths = [p for p in video_paths if not p.is_relative_to(output_resolved)]
+    if len(video_paths) < pre_exclude:
+        console.print(
+            f"  [dim]Excluded {pre_exclude - len(video_paths)} file(s) already inside "
+            f"the output directory (from a previous run).[/dim]"
+        )
+
+    if not video_paths:
+        raise click.UsageError("No supported video files found in the provided inputs.")
+
+    console.print(f"Found [cyan]{len(video_paths)}[/cyan] video(s).")
+
+    # --- 2. Overwrite check ---
+    if (
+        not dry_run
+        and output.exists()
+        and output.is_dir()
+        and any(output.iterdir())
+    ):
+        click.confirm(
+            f"Output directory '{output}' already exists and is not empty. "
+            "Continue and merge into it?",
+            abort=True,
+        )
+
+    # --- 1b. Load reference embeddings ---
+    import re as _re
+    reference_embeddings: dict = {}
+    if ref_dir is not None:
+        from face_grouper.scanner import scan_images
+        ref_paths = scan_images([ref_dir])
+        if ref_paths:
+            potential_names = {(_re.sub(r"_\d+$", "", p.stem) or p.stem) for p in ref_paths}
+            reserved_conflicts = {
+                name for name in potential_names
+                if name == "unknown" or _re.match(r"^person_\d+$", name)
+            }
+            if reserved_conflicts:
+                raise click.UsageError(
+                    f"Reference image name(s) conflict with reserved names: "
+                    f"{', '.join(sorted(reserved_conflicts))}. "
+                    f"Rename them to avoid 'unknown' and 'person_N' patterns."
+                )
+
+            console.print(f"Loading reference faces from [cyan]{len(ref_paths)}[/cyan] image(s) in {ref_dir}...")
+            reference_embeddings = detect_reference_faces(
+                ref_paths, backend=backend, model=model, upsample=upsample
+            )
+
+        if not reference_embeddings:
+            console.print(
+                "[yellow]Warning:[/yellow] No valid reference faces found — "
+                "clusters will use default person_N naming."
+            )
+        else:
+            total_photos = sum(len(v) for v in reference_embeddings.values())
+            names = ", ".join(f"[bold]{n}[/bold]" for n in sorted(reference_embeddings))
+            console.print(
+                f"Loaded [cyan]{len(reference_embeddings)}[/cyan] person(s) from "
+                f"[cyan]{total_photos}[/cyan] reference photo(s): {names}"
+            )
+
+    # --- 2. Detect faces ---
+    console.print("\nStep 1/3 — Face detection")
+    embeddings, embedded_paths, skipped_paths = detect_video_faces(
+        video_paths, model=model, upsample=upsample, backend=backend, max_duration=max_duration
+    )
+
+    n_unique = len(set(embedded_paths))
+    console.print(
+        f"  [green]{len(embeddings)}[/green] face(s) across "
+        f"[green]{n_unique}[/green] video(s) with faces, "
+        f"[yellow]{len(skipped_paths)}[/yellow] skipped."
+    )
+
+    # --- 3. Cluster ---
+    console.print("\nStep 2/3 — Clustering")
+    labels: list[int] = []
+    label_map: dict[int, int] = {}
+
+    metric = "cosine" if backend.lower() == "arcface" else "euclidean"
+    console.print(f"  [dim]metric={metric}[/dim]")
+
+    if embeddings:
+        if debug:
+            stats = embedding_distance_stats(embeddings, metric=metric)
+            if stats:
+                console.print(
+                    f"  [dim]Distance stats ({metric}) — "
+                    f"min: {stats['min']:.3f}  "
+                    f"p25: {stats['p25']:.3f}  "
+                    f"median: {stats['median']:.3f}  "
+                    f"p75: {stats['p75']:.3f}  "
+                    f"max: {stats['max']:.3f}[/dim]"
+                )
+                console.print(
+                    f"  [dim]Suggested --eps: just below the gap between p25 "
+                    f"(same person) and p75 (different people).[/dim]"
+                )
+
+        labels = cluster_embeddings(embeddings, eps=eps, min_samples=min_samples, metric=metric)
+
+        # Dedup before relabelling: count each (video, label) pair only once so that
+        # a video with many frames of the same person doesn't inflate its cluster count.
+        seen: set = set()
+        deduped: list[int] = []
+        for _path, _lbl in zip(embedded_paths, labels):
+            key = (_path, _lbl)
+            if key not in seen:
+                seen.add(key)
+                deduped.append(_lbl)
+        label_map = relabel_by_frequency(deduped)
+
+        unique_persons = len(label_map)
+        name_map = _resolve_reference_names(embeddings, labels, label_map, reference_embeddings, metric, eps)
+        outliers = labels.count(-1)
+        console.print(
+            f"  [green]{unique_persons}[/green] person group(s) found, "
+            f"[yellow]{outliers}[/yellow] outlier face(s)."
+        )
+
+        if unique_persons == 1 and len(embeddings) > 1:
+            suggested = round(max(0.1, eps - 0.1), 2)
+            console.print(
+                f"  [yellow]Tip:[/yellow] Only 1 group found — try a lower "
+                f"[bold]--eps {suggested}[/bold], or run with [bold]--debug[/bold] "
+                f"to inspect distance distribution."
+            )
+        if name_map:
+            console.print(
+                f"  Reference matches: "
+                + ", ".join(f"person_{label_map[lbl]} → [bold]{name}[/bold]" for lbl, name in name_map.items())
+            )
+    else:
+        console.print("  No embeddings to cluster — all videos will go to skipped/.")
+        name_map = {}
+
+    # --- 4. Organise ---
+    console.print(f"\nStep 3/3 — Organising{'  DRY-RUN' if dry_run else ''}")
+    organize_videos(
+        embedded_paths=embedded_paths,
+        skipped_paths=skipped_paths,
         labels=labels,
         label_map=label_map,
         output_dir=output,

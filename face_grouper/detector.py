@@ -229,6 +229,134 @@ def detect_faces(
     return _detect_dlib(image_paths, model=model, upsample=upsample, multi_face=multi_face)
 
 
+def detect_video_faces(
+    video_paths: list[Path],
+    model: str = "hog",
+    upsample: int = 1,
+    backend: str = "dlib",
+    max_duration: float = 15.0,
+) -> tuple[list[np.ndarray], list[Path], list[Path]]:
+    """Detect faces in video files by sampling frames and extracting embeddings.
+
+    Samples 1 frame per second from each video. Videos that exceed max_duration or
+    cannot be opened are added to skipped_paths. Videos from which no face is detected
+    across all frames are also added to skipped_paths.
+
+    Args:
+        video_paths: List of video file paths to process.
+        model: Detection model for dlib backend — "hog" (fast) or "cnn" (accurate).
+            Ignored when backend is "arcface".
+        upsample: Number of times to upsample frames before detection for dlib backend.
+            Ignored when backend is "arcface".
+        backend: Face recognition backend — "dlib" (default) or "arcface".
+        max_duration: Maximum allowed video duration in seconds. Videos longer than
+            this are skipped with a warning and added to skipped_paths.
+
+    Returns:
+        A tuple of:
+        - embeddings: List of numpy arrays (128-D for dlib, 512-D for arcface),
+            one per detected face across all sampled frames.
+        - embedded_paths: Video paths corresponding to each embedding. The same
+            path may appear multiple times (once per face detected in any frame).
+        - skipped_paths: Paths of videos that were too long, unreadable, or had
+            zero faces detected across all frames.
+    """
+    from face_grouper import frame_extractor as _fe  # noqa: PLC0415 — deferred
+
+    embeddings: list[np.ndarray] = []
+    embedded_paths: list[Path] = []
+    skipped_paths: list[Path] = []
+
+    if backend.lower() == "arcface":
+        from insightface.app import FaceAnalysis  # noqa: PLC0415
+
+        app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
+        app.prepare(ctx_id=0, det_size=(640, 640))
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+        ) as progress:
+            task = progress.add_task("Detecting faces (ArcFace)...", total=len(video_paths))
+
+            for video_path in video_paths:
+                progress.update(task, description=f"Processing {video_path.name}")
+                frames = _fe.extract_frames(video_path, max_duration=max_duration)
+                if frames is None:
+                    console.print(
+                        f"[yellow]Warning:[/yellow] {video_path.name} — "
+                        "too long or unreadable, skipping."
+                    )
+                    skipped_paths.append(video_path)
+                    progress.advance(task)
+                    continue
+
+                faces_found = 0
+                for frame in frames:
+                    faces = app.get(frame)
+                    for face in faces:
+                        embeddings.append(face.embedding)
+                        embedded_paths.append(video_path)
+                        faces_found += 1
+
+                if faces_found == 0:
+                    skipped_paths.append(video_path)
+
+                progress.advance(task)
+
+    else:
+        import cv2 as _cv2  # noqa: PLC0415 — deferred
+        import face_recognition  # noqa: PLC0415 — deferred
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+        ) as progress:
+            task = progress.add_task("Detecting faces...", total=len(video_paths))
+
+            for video_path in video_paths:
+                progress.update(task, description=f"Processing {video_path.name}")
+                frames = _fe.extract_frames(video_path, max_duration=max_duration)
+                if frames is None:
+                    console.print(
+                        f"[yellow]Warning:[/yellow] {video_path.name} — "
+                        "too long or unreadable, skipping."
+                    )
+                    skipped_paths.append(video_path)
+                    progress.advance(task)
+                    continue
+
+                faces_found = 0
+                for frame in frames:
+                    rgb_frame = _cv2.cvtColor(frame, _cv2.COLOR_BGR2RGB)
+                    locs = face_recognition.face_locations(
+                        rgb_frame,
+                        number_of_times_to_upsample=upsample,
+                        model=model,
+                    )
+                    if locs:
+                        encodings = face_recognition.face_encodings(
+                            rgb_frame, known_face_locations=locs
+                        )
+                        for encoding in encodings:
+                            embeddings.append(encoding)
+                            embedded_paths.append(video_path)
+                            faces_found += 1
+
+                if faces_found == 0:
+                    skipped_paths.append(video_path)
+
+                progress.advance(task)
+
+    return embeddings, embedded_paths, skipped_paths
+
+
 def _reference_base_name(stem: str) -> str:
     """Extract person name from a reference filename stem by stripping trailing _N suffix.
 
@@ -253,7 +381,7 @@ def detect_reference_faces(
     so that embedding spaces are compatible.
 
     Args:
-        image_paths: Reference image paths (typically from a --reference-dir scan).
+        image_paths: Reference image paths (typically from a --ref-dir scan).
         backend: "dlib" or "arcface" — must match the backend used for main detection.
         model: dlib detection model ("hog" or "cnn"). Ignored for arcface.
         upsample: Upsample factor for dlib. Ignored for arcface.

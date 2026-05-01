@@ -12,7 +12,7 @@ console = Console()
 _MAX_COLLISION_ATTEMPTS = 9999
 
 
-def _collision_free_path(
+def collision_free_path(
     target_dir: Path, stem: str, suffix: str, taken: set[Path]
 ) -> Path:
     """Return a path in target_dir that neither exists on disk nor is in taken.
@@ -79,14 +79,14 @@ def organize(
             else:
                 subdir = output_dir / _label_name(label)
 
-            dest = _collision_free_path(subdir, img_path.stem, img_path.suffix, planned)
+            dest = collision_free_path(subdir, img_path.stem, img_path.suffix, planned)
             planned.add(dest)
             plan.append((img_path, dest))
 
         # No-face images go to unknown/
         for img_path in no_face_paths:
             subdir = output_dir / "unknown"
-            dest = _collision_free_path(subdir, img_path.stem, img_path.suffix, planned)
+            dest = collision_free_path(subdir, img_path.stem, img_path.suffix, planned)
             planned.add(dest)
             plan.append((img_path, dest))
 
