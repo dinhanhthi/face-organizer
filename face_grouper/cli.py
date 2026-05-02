@@ -342,7 +342,8 @@ def group_command(
     ):
         click.confirm(
             f"Output directory '{output}' already exists and is not empty. "
-            "Continue and merge into it?",
+            "Existing files will NOT be overwritten — new files will be added with "
+            "incremented names if there are conflicts. Continue?",
             abort=True,
         )
 
@@ -630,7 +631,8 @@ def video_command(
     ):
         click.confirm(
             f"Output directory '{output}' already exists and is not empty. "
-            "Continue and merge into it?",
+            "Existing files will NOT be overwritten — new files will be added with "
+            "incremented names if there are conflicts. Continue?",
             abort=True,
         )
 

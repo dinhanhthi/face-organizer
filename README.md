@@ -102,6 +102,10 @@ Videos exceeding `--max-duration` are skipped and copied to `output/skipped/`. A
 |--------|---------|-------------|
 | `--max-duration` | `15.0` | Max video length in seconds (1–120). Videos over this go to `skipped/`. Warns if > 30s |
 
+## Output directory behaviour
+
+If the output directory already exists and is not empty, `fgroup` will ask for confirmation before proceeding. Existing files are **never overwritten** — if a new file would collide with an existing filename, the new file is written with an incremented name (e.g. `img.jpg` → `img_1.jpg` → `img_2.jpg`). This makes it safe to run `fgroup` on an existing output folder; previous results are preserved.
+
 ## Dev mode
 
 ```bash
