@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="logo.png" alt="face-organizer Logo" width="100" />
+  <img src="logo.png" alt="face-grouper Logo" width="100" />
 </p>
 
-<h1 align="center">face-organizer</h1>
+<h1 align="center">face-grouper</h1>
 
 <p align="center">
   A CLI tool that groups photos and videos by person using offline face recognition.
@@ -105,8 +105,8 @@ Videos exceeding `--max-duration` are skipped and copied to `output/skipped/`. A
 ## Dev mode
 
 ```bash
-git clone https://github.com/your-username/face-organizer.git
-cd face-organizer
+git clone https://github.com/your-username/face-grouper.git
+cd face-grouper
 
 # Install with all optional extras for full local development
 pip install -e ".[arcface,video]"
