@@ -291,23 +291,23 @@ def group_command(
             f"the output directory (from a previous run).[/dim]"
         )
 
-    # Load previous manifest for --resume
+    # Load previous run entry for --resume
     import datetime
     from face_grouper.run_tracker import (
-        RunManifest,
+        RunEntry,
         build_processed_set,
         compare_settings,
         filter_unprocessed,
-        load_manifest,
-        save_manifest,
+        load_entry,
+        save_entry,
     )
-    prior_manifest: RunManifest | None = None
+    prior_entry: RunEntry | None = None
     if resume:
-        prior_manifest = load_manifest(output)
-        if prior_manifest is None:
-            console.print("[dim]No previous run found, starting fresh.[/dim]")
+        prior_entry = load_entry(output, list(inputs))
+        if prior_entry is None:
+            console.print("[dim]No previous run found for these inputs, starting fresh.[/dim]")
         else:
-            drift = compare_settings(prior_manifest.settings, {
+            drift = compare_settings(prior_entry.settings, {
                 "backend": backend, "model": model, "eps": eps,
                 "min_samples": min_samples, "mode": mode, "upsample": upsample,
                 "no_multi_export": no_multi_export, "start_index": start_index,
@@ -315,7 +315,7 @@ def group_command(
             })
             for msg in drift:
                 console.print(f"  [yellow]Warning:[/yellow] {msg}")
-            processed_set = build_processed_set(prior_manifest)
+            processed_set = build_processed_set(prior_entry)
             before = len(image_paths)
             image_paths = filter_unprocessed(image_paths, processed_set)
             skipped_count = before - len(image_paths)
@@ -475,11 +475,10 @@ def group_command(
     )
 
     if not dry_run:
-        prior_processed = build_processed_set(prior_manifest)
+        prior_processed = build_processed_set(prior_entry)
         new_processed = {str(p.resolve()) for p in successes}
         all_processed = sorted(prior_processed | new_processed)
-        manifest = RunManifest(
-            schema_version=1,
+        entry = RunEntry(
             app_version=__version__,
             command="group",
             run_date=datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -498,7 +497,7 @@ def group_command(
             },
             processed_files=all_processed,
         )
-        save_manifest(output, manifest)
+        save_entry(output, list(inputs), entry)
     if org_errors:
         raise SystemExit(1)
 
@@ -694,30 +693,30 @@ def video_command(
             f"the output directory (from a previous run).[/dim]"
         )
 
-    # Load previous manifest for --resume
+    # Load previous run entry for --resume
     import datetime
     from face_grouper.run_tracker import (
-        RunManifest,
+        RunEntry,
         build_processed_set,
         compare_settings,
         filter_unprocessed,
-        load_manifest,
-        save_manifest,
+        load_entry,
+        save_entry,
     )
-    prior_manifest: RunManifest | None = None
+    prior_entry: RunEntry | None = None
     if resume:
-        prior_manifest = load_manifest(output)
-        if prior_manifest is None:
-            console.print("[dim]No previous run found, starting fresh.[/dim]")
+        prior_entry = load_entry(output, list(inputs))
+        if prior_entry is None:
+            console.print("[dim]No previous run found for these inputs, starting fresh.[/dim]")
         else:
-            drift = compare_settings(prior_manifest.settings, {
+            drift = compare_settings(prior_entry.settings, {
                 "backend": backend, "model": model, "eps": eps,
                 "min_samples": min_samples, "mode": mode, "upsample": upsample,
                 "max_duration": max_duration, "start_index": start_index,
             })
             for msg in drift:
                 console.print(f"  [yellow]Warning:[/yellow] {msg}")
-            processed_set = build_processed_set(prior_manifest)
+            processed_set = build_processed_set(prior_entry)
             before = len(video_paths)
             video_paths = filter_unprocessed(video_paths, processed_set)
             skipped_count = before - len(video_paths)
@@ -874,11 +873,10 @@ def video_command(
     )
 
     if not dry_run:
-        prior_processed = build_processed_set(prior_manifest)
+        prior_processed = build_processed_set(prior_entry)
         new_processed = {str(p.resolve()) for p in successes}
         all_processed = sorted(prior_processed | new_processed)
-        manifest = RunManifest(
-            schema_version=1,
+        entry = RunEntry(
             app_version=__version__,
             command="video",
             run_date=datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -896,6 +894,6 @@ def video_command(
             },
             processed_files=all_processed,
         )
-        save_manifest(output, manifest)
+        save_entry(output, list(inputs), entry)
     if org_errors:
         raise SystemExit(1)
