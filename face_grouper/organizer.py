@@ -43,7 +43,7 @@ def organize(
     dry_run: bool,
     name_map: dict[int, str] | None = None,
     start_index: int = 1,
-) -> None:
+) -> tuple[list[Path], list[tuple[Path, str]]]:
     """Copy images into organised output according to mode.
 
     Group mode:  output/person_N/original_name.ext  (with collision suffix)
@@ -122,7 +122,7 @@ def organize(
 
     if dry_run:
         _print_dry_run_table(plan)
-        return
+        return [], []
 
     # Execute copies — collect errors so a mid-run failure doesn't silently produce
     # partial output. All copyable files are attempted before reporting failures.
@@ -145,9 +145,12 @@ def organize(
         )
         for src, msg in errors:
             console.print(f"  [red]✗[/red] {src}: {msg}")
-        raise SystemExit(1)
+    else:
+        console.print(f"\n[bold green]Done.[/bold green] {copied} file(s) organised into {output_dir}")
 
-    console.print(f"\n[bold green]Done.[/bold green] {copied} file(s) organised into {output_dir}")
+    failed_sources = {src for src, _ in errors}
+    successes = sorted({src for src, _ in plan if src not in failed_sources}, key=str)
+    return successes, errors
 
 
 def _print_dry_run_table(plan: list[tuple[Path, Path]]) -> None:

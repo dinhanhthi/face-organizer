@@ -21,7 +21,7 @@ def organize_videos(
     dry_run: bool,
     name_map: dict[int, str] | None = None,
     start_index: int = 1,
-) -> None:
+) -> tuple[list[Path], list[tuple[Path, str]]]:
     """Copy videos into organised output folders grouped by detected person.
 
     Each unique video is copied once per person detected in it. Videos where
@@ -108,7 +108,7 @@ def organize_videos(
 
     if dry_run:
         _print_dry_run_table(plan)
-        return
+        return [], []
 
     # Execute copies
     errors: list[tuple[Path, str]] = []
@@ -130,9 +130,12 @@ def organize_videos(
         )
         for src, msg in errors:
             console.print(f"  [red]x[/red] {src}: {msg}")
-        raise SystemExit(1)
+    else:
+        console.print(f"\n[bold green]Done.[/bold green] {copied} file(s) organised into {output_dir}")
 
-    console.print(f"\n[bold green]Done.[/bold green] {copied} file(s) organised into {output_dir}")
+    failed_sources = {src for src, _ in errors}
+    successes = sorted({src for src, _, _reason in plan if src not in failed_sources}, key=str)
+    return successes, errors
 
 
 def _print_dry_run_table(plan: list[tuple[Path, Path, str]]) -> None:

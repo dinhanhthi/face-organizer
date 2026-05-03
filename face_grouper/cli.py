@@ -239,6 +239,12 @@ def _resolve_reference_names(
         "Ignored in group mode."
     ),
 )
+@click.option(
+    "--resume",
+    is_flag=True,
+    default=False,
+    help="Skip files already processed in a previous run. Warns if settings differ.",
+)
 def group_command(
     inputs: tuple[Path, ...],
     output: Path,
@@ -253,6 +259,7 @@ def group_command(
     ref_dir: Path | None,
     no_multi_export: bool,
     start_index: int,
+    resume: bool,
 ) -> None:
     """Scan INPUTS for images, detect faces, cluster by person, and organise output.
 
@@ -283,6 +290,40 @@ def group_command(
             f"  [dim]Excluded {pre_exclude - len(image_paths)} file(s) already inside "
             f"the output directory (from a previous run).[/dim]"
         )
+
+    # Load previous manifest for --resume
+    import datetime
+    from face_grouper.run_tracker import (
+        RunManifest,
+        build_processed_set,
+        compare_settings,
+        filter_unprocessed,
+        load_manifest,
+        save_manifest,
+    )
+    prior_manifest: RunManifest | None = None
+    if resume:
+        prior_manifest = load_manifest(output)
+        if prior_manifest is None:
+            console.print("[dim]No previous run found, starting fresh.[/dim]")
+        else:
+            drift = compare_settings(prior_manifest.settings, {
+                "backend": backend, "model": model, "eps": eps,
+                "min_samples": min_samples, "mode": mode, "upsample": upsample,
+                "no_multi_export": no_multi_export, "start_index": start_index,
+                "ref_dir": str(ref_dir) if ref_dir is not None else None,
+            })
+            for msg in drift:
+                console.print(f"  [yellow]Warning:[/yellow] {msg}")
+            processed_set = build_processed_set(prior_manifest)
+            before = len(image_paths)
+            image_paths = filter_unprocessed(image_paths, processed_set)
+            skipped_count = before - len(image_paths)
+            if skipped_count:
+                console.print(f"  [dim]Resuming: skipping {skipped_count} already-processed file(s).[/dim]")
+            if not image_paths:
+                console.print("[bold green]All inputs already processed.[/bold green]")
+                return
 
     if not image_paths:
         raise click.UsageError("No supported image files found in the provided inputs.")
@@ -336,6 +377,7 @@ def group_command(
     # --- 2. Overwrite check ---
     if (
         not dry_run
+        and not resume
         and output.exists()
         and output.is_dir()
         and any(output.iterdir())
@@ -420,7 +462,7 @@ def group_command(
 
     # --- 5. Organise ---
     console.print(f"\nStep 3/3 — Organising (mode={mode}{'  DRY-RUN' if dry_run else ''})")
-    organize(
+    successes, org_errors = organize(
         image_paths=embedded_paths,
         no_face_paths=no_face_paths,
         labels=labels,
@@ -431,6 +473,34 @@ def group_command(
         name_map=name_map or None,
         start_index=start_index,
     )
+
+    if not dry_run:
+        prior_processed = build_processed_set(prior_manifest)
+        new_processed = {str(p.resolve()) for p in successes}
+        all_processed = sorted(prior_processed | new_processed)
+        manifest = RunManifest(
+            schema_version=1,
+            app_version=__version__,
+            command="group",
+            run_date=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            inputs=[str(Path(p).resolve()) for p in inputs],
+            settings={
+                "backend": backend, "model": model, "eps": eps,
+                "min_samples": min_samples, "mode": mode, "upsample": upsample,
+                "no_multi_export": no_multi_export, "start_index": start_index,
+                "ref_dir": str(ref_dir) if ref_dir is not None else None,
+            },
+            stats={
+                "n_images_scanned": len(image_paths),
+                "n_faces_detected": len(embedded_paths),
+                "n_persons_found": len(label_map),
+                "n_no_face": len(no_face_paths),
+            },
+            processed_files=all_processed,
+        )
+        save_manifest(output, manifest)
+    if org_errors:
+        raise SystemExit(1)
 
 
 @cli.command(name="video", epilog=_VIDEO_EPILOG)
@@ -561,6 +631,12 @@ def group_command(
         "Ignored in group mode."
     ),
 )
+@click.option(
+    "--resume",
+    is_flag=True,
+    default=False,
+    help="Skip files already processed in a previous run. Warns if settings differ.",
+)
 def video_command(
     inputs: tuple[Path, ...],
     output: Path,
@@ -575,6 +651,7 @@ def video_command(
     dry_run: bool,
     debug: bool,
     start_index: int,
+    resume: bool,
 ) -> None:
     """Scan INPUTS for videos, detect faces, cluster by person, and organise output.
 
@@ -617,6 +694,39 @@ def video_command(
             f"the output directory (from a previous run).[/dim]"
         )
 
+    # Load previous manifest for --resume
+    import datetime
+    from face_grouper.run_tracker import (
+        RunManifest,
+        build_processed_set,
+        compare_settings,
+        filter_unprocessed,
+        load_manifest,
+        save_manifest,
+    )
+    prior_manifest: RunManifest | None = None
+    if resume:
+        prior_manifest = load_manifest(output)
+        if prior_manifest is None:
+            console.print("[dim]No previous run found, starting fresh.[/dim]")
+        else:
+            drift = compare_settings(prior_manifest.settings, {
+                "backend": backend, "model": model, "eps": eps,
+                "min_samples": min_samples, "mode": mode, "upsample": upsample,
+                "max_duration": max_duration, "start_index": start_index,
+            })
+            for msg in drift:
+                console.print(f"  [yellow]Warning:[/yellow] {msg}")
+            processed_set = build_processed_set(prior_manifest)
+            before = len(video_paths)
+            video_paths = filter_unprocessed(video_paths, processed_set)
+            skipped_count = before - len(video_paths)
+            if skipped_count:
+                console.print(f"  [dim]Resuming: skipping {skipped_count} already-processed file(s).[/dim]")
+            if not video_paths:
+                console.print("[bold green]All inputs already processed.[/bold green]")
+                return
+
     if not video_paths:
         raise click.UsageError("No supported video files found in the provided inputs.")
 
@@ -625,12 +735,13 @@ def video_command(
     # --- 2. Overwrite check ---
     if (
         not dry_run
+        and not resume
         and output.exists()
         and output.is_dir()
         and any(output.iterdir())
     ):
         click.confirm(
-            f"Output directory '{output}' already exists and is not empty. "
+            f"\nOutput directory '{output}' already exists and is not empty. "
             "Existing files will NOT be overwritten — new files will be added with "
             "incremented names if there are conflicts. Continue?",
             abort=True,
@@ -750,7 +861,7 @@ def video_command(
 
     # --- 4. Organise ---
     console.print(f"\nStep 3/3 — Organising{'  DRY-RUN' if dry_run else ''}")
-    organize_videos(
+    successes, org_errors = organize_videos(
         embedded_paths=embedded_paths,
         skipped_paths=skipped_paths,
         labels=labels,
@@ -761,3 +872,30 @@ def video_command(
         name_map=name_map or None,
         start_index=start_index,
     )
+
+    if not dry_run:
+        prior_processed = build_processed_set(prior_manifest)
+        new_processed = {str(p.resolve()) for p in successes}
+        all_processed = sorted(prior_processed | new_processed)
+        manifest = RunManifest(
+            schema_version=1,
+            app_version=__version__,
+            command="video",
+            run_date=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            inputs=[str(Path(p).resolve()) for p in inputs],
+            settings={
+                "backend": backend, "model": model, "eps": eps,
+                "min_samples": min_samples, "mode": mode, "upsample": upsample,
+                "max_duration": max_duration, "start_index": start_index,
+            },
+            stats={
+                "n_videos_scanned": len(video_paths),
+                "n_faces_detected": len(embeddings),
+                "n_persons_found": len(label_map),
+                "n_skipped": len(skipped_paths),
+            },
+            processed_files=all_processed,
+        )
+        save_manifest(output, manifest)
+    if org_errors:
+        raise SystemExit(1)
