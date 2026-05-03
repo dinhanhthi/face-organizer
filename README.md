@@ -8,6 +8,19 @@
   A CLI tool that groups photos and videos by person using offline face recognition.
 </p>
 
+## Features
+
+- **Offline face recognition** — no cloud, no API keys, runs entirely on your machine
+- **Two backends** — `dlib` (fast, 128-D embeddings) or `arcface` (accurate, 512-D embeddings)
+- **Photos and videos** — group `.jpg`/`.png`/`.webp` photos and `.mp4`/`.mov`/`.mkv` clips
+- **Named clusters** — point to a reference folder and clusters are named after your contacts instead of `person_1`, `person_2`, …
+- **Multi-face export** — a photo with two people lands in both person folders by default
+- **Non-destructive** — originals are never modified; all output is copied, never moved
+- **Collision-safe output** — files are never overwritten; conflicts are renamed automatically
+- **Dry-run mode** — preview planned operations before copying anything
+- **Flexible output modes** — `group` (per-person subfolders) or `rename` (flat files with sequential index)
+- **Unknown handling** — unrecognised faces and outliers go to `unknown/` automatically
+
 ## Installation
 
 ```bash
