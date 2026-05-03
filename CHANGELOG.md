@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-03
+
+### Added
+- `--resume` flag for `fgroup video`: skips input sets that were already processed to the same output directory ([66cb6c9](https://github.com/dinhanhthi/face-organizer/commit/66cb6c9))
+
+### Changed
+- Run-tracking refactored to support multiple distinct input sets per output directory — each `(input_dir, output_dir)` pair is tracked independently ([498881f](https://github.com/dinhanhthi/face-organizer/commit/498881f))
+
+### Fixed
+- Tuple unpacking error in `organize_videos` when processing face embeddings ([66cb6c9](https://github.com/dinhanhthi/face-organizer/commit/66cb6c9))
+
 ## [0.4.2] - 2026-05-02
 
 ### Changed
